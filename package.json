@@ -6,8 +6,8 @@
   "scripts": {
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --forceExit --detectOpenHandles",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "cross-env NODE_ENV=development node index.js",
+    "dev": "cross-env NODE_ENV=production nodemon index.js"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +17,7 @@
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "email-validator": "^2.0.4",
     "exceljs": "^4.4.0",
@@ -25,6 +26,7 @@
     "helmet": "^8.1.0",
     "json-web-token": "^3.2.0",
     "jsonwebtoken": "^9.0.3",
+    "libphonenumber-js": "^1.13.1",
     "mongodb": "^7.2.0",
     "mongoose": "^9.6.2",
     "nodemailer": "^8.0.7",

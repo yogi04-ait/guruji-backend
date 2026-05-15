@@ -1,19 +1,48 @@
 import express from "express";
 import adminAuth from "../middleware/auth.js";
-import { applyForJob, getApplicants, getApplicantById, getApplicantsExcel } from "../controller/applicationController.js";
+
+import {
+    applyForJob,
+    getApplicants,
+    getApplicantById,
+    getApplicantsExcel,
+    updateApplicantStatus
+} from "../controller/applicationController.js";
+
 const applicantRouter = express.Router();
+
 
 // Apply for a job
 applicantRouter.post("/apply/:jobId", applyForJob);
 
-// Get applicants
+
+// Get all applicants
 applicantRouter.get("/applicants", adminAuth, getApplicants);
 
-// Get applicants data in excel file
-applicantRouter.get("/applicants/excel", adminAuth, getApplicantsExcel);
 
-// Get specific applicant by applicant ID
-applicantRouter.get("/applicant/:applicantId", adminAuth, getApplicantById);
+// Download applicants excel
+applicantRouter.get(
+    "/applicants/excel",
+    adminAuth,
+    getApplicantsExcel
+);
+
+
+// Get single applicant by ID
+// KEEP THIS LAST
+applicantRouter.get(
+    "/applicant/:applicantId",
+    adminAuth,
+    getApplicantById
+);
+
+// Update applicant status
+applicantRouter.put(
+    "/applicant/:applicantId/status",
+    adminAuth,
+    updateApplicantStatus
+);
+
 
 
 

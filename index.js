@@ -12,6 +12,7 @@ import companyRouter from './Routes/company.route.js';
 import authRouter from './Routes/auth.js';
 import hiringPartnerRouter from './Routes/hiringPartner.js';
 import applicantRouter from './Routes/applicants.js';
+import enquiryRouter from './Routes/enquiry.js';
 
 import { globalLimiter } from './middleware/ratelimiter.js';
 
@@ -43,6 +44,8 @@ app.use('/', hiringPartnerRouter);
 app.use('/', companyRouter);
 app.use('/', applicantRouter);
 app.use('/', testimonialRouter);
+app.use('/', enquiryRouter);
+
 
 connectDB()
   .then(() => {

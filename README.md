@@ -299,6 +299,9 @@ curl -X POST http://localhost:5000/apply/605c6f9f1c4ae2a1f0e7b123 \
 - Added indexes on frequently queried and sorted fields.
 - Database connection pooling and timeouts are configurable by env variables.
 - Rate limiter thresholds are configurable and relaxed in test environment to avoid false positives.
+- Use filter-aware `countDocuments(filter)` to return accurate paginated totals.
+- Made outgoing email sends non-blocking (fire-and-forget) after successful persistence to reduce API latency.
+- Parallelized count + find operations where appropriate to reduce overall response time.
 
 See `docs/optimizations.md` for more details and monitoring instructions.
 
@@ -338,4 +341,3 @@ Placeholder: add client screenshots or example Postman collection here.
 This project uses the ISC license (see `package.json`).
 
 ---
-

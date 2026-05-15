@@ -1,8 +1,12 @@
 import Applicant from "../models/applicant.model.js";
 import Job from "../models/company.model.js";
 import ExcelJS from "exceljs";
-import transporter from "../utils/mail.js";
+import transporter from "../utils/mail/mail.js";
 import { validate } from "email-validator";
+import { sanitize } from "../utils/sanitize.js";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { adminJobApplicationTemplate } from "../utils/mail/templates/adminJobApplication.js";
+import { applicantConfirmationTemplate } from "../utils/mail/templates/applicantConfirmation.js";
 
 const applyForJob = async (req, res) => {
     try {
@@ -28,13 +32,25 @@ const applyForJob = async (req, res) => {
 
         const companyName = job.name;
         const jobRole = job.role;
+        const safeMessage = sanitize(message);
+        const safeFullName = sanitize(fullName);
+        const normalizedEmail = email?.trim().toLowerCase();
 
-        const safeMessage = message
-            ?.replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
+
+        //  phone number validation
+        const parsedPhone = parsePhoneNumberFromString(phone, "IN");
+        if (!parsedPhone?.isValid()) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid phone number",
+            });
+        }
+
+        const normalizedPhone = parsedPhone.number;
+
 
         // Validation
-        if (!fullName || !email || !phone) {
+        if (!safeFullName || !normalizedEmail || !normalizedPhone) {
             return res.status(400).json({
                 success: false,
                 message: "Required fields missing",
@@ -42,7 +58,7 @@ const applyForJob = async (req, res) => {
         }
 
         // Email validation
-        if (!validate(email)) {
+        if (!validate(normalizedEmail)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid email address",
@@ -51,7 +67,7 @@ const applyForJob = async (req, res) => {
 
         // Prevent duplicate applications
         const existingApplicant = await Applicant.findOne({
-            email,
+            email: normalizedEmail,
             job: jobId,
         });
 
@@ -67,76 +83,47 @@ const applyForJob = async (req, res) => {
             job: job._id,
             companyName,
             jobRole,
-            fullName,
-            email,
-            phone,
+            fullName: safeFullName,
+            email: normalizedEmail,
+            phone: normalizedPhone,
             message: safeMessage,
         });
 
         // Admin email template
-        const adminHtmlTemplate = `
-        <div style="font-family: Arial; padding: 20px;">
-            <h2>New Job Application</h2>
-
-            <p><strong>Job ID:</strong> ${jobId}</p>
-            <p><strong>Company:</strong> ${companyName}</p>
-            <p><strong>Role:</strong> ${jobRole}</p>
-
-            <hr />
-
-            <p><strong>Full Name:</strong> ${fullName}</p>
-            <p><strong>Email:</strong> ${email}</p>
-            <p><strong>Phone:</strong> ${phone}</p>
-
-            <p><strong>Message:</strong></p>
-            <p>${safeMessage || "No message provided"}</p>
-        </div>
-        `;
+        const adminHtmlTemplate = adminJobApplicationTemplate({
+            jobId,
+            companyName,
+            jobRole,
+            fullName: safeFullName,
+            email: normalizedEmail,
+            phone: normalizedPhone,
+            message: safeMessage,
+        });
 
         // Applicant confirmation template
-        const applicantHtmlTemplate = `
-        <div style="font-family: Arial; padding: 20px;">
-            <h2>Application Received</h2>
+        const applicantHtmlTemplate = applicantConfirmationTemplate({
+            fullName: safeFullName,
+            jobRole,
+            companyName
+        })
 
-            <p>Hi ${fullName},</p>
-
-            <p>
-                Thank you for applying for the 
-                <strong>${jobRole}</strong> position at 
-                <strong>${companyName}</strong>.
-            </p>
-
-            <p>
-                We have successfully received your application.
-                Our team will review it and contact you soon.
-            </p>
-
-            <br />
-
-            <p>Best regards,</p>
-            <p><strong>Guruji Job Consultancy</strong></p>
-        </div>
-        `;
 
         // Send both emails in parallel
-        await Promise.all([
-
-            // Admin email
+        // Send emails asynchronously to reduce request latency (fire-and-forget)
+        Promise.all([
             transporter.sendMail({
                 from: `"Job Portal" <${process.env.EMAIL_USER}>`,
                 to: process.env.EMAIL_USER,
                 subject: `New Application for ${jobRole} at ${companyName}`,
                 html: adminHtmlTemplate,
             }),
-
-            // Applicant email
             transporter.sendMail({
                 from: `"Job Portal" <${process.env.EMAIL_USER}>`,
-                to: email,
+                to: normalizedEmail,
                 subject: `Application Received for ${jobRole} at ${companyName}`,
                 html: applicantHtmlTemplate,
             }),
-        ]);
+        ]).catch((err) => console.error('Application email send failed:', err));
 
         return res.status(201).json({
             success: true,
@@ -160,156 +147,43 @@ const applyForJob = async (req, res) => {
 
 const getApplicants = async (req, res) => {
     try {
+        const page = Math.max(parseInt(req.query.page) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100);
+        // Get status from query
+        const { applicantStatus } = req.query;
 
-        // Query params
-        const page = Number(req.query.page) || 1;
-        const limit = Number(req.query.limit) || 10;
-        const status = req.query.status;
-
-        // Prevent invalid values
-        const validatedPage = Math.max(page, 1);
-        const validatedLimit = Math.max(limit, 1);
-
-        // Skip calculation
-        const skip = (validatedPage - 1) * validatedLimit;
-
-        // Filters
-        const filters = {};
-
-        // Optional status filter
-        if (status) {
-            filters.applicantStatus = status;
+        const filter = {};
+        if (applicantStatus) {
+            filter.applicantStatus = applicantStatus;
         }
 
-        // Total applicants count
-        const totalApplicants =
-            await Applicant.countDocuments(filters);
 
-        // Aggregation
-        const applicants = await Applicant.aggregate([
+        const skip = (page - 1) * limit;
 
-            // Apply filters
-            {
-                $match: filters,
-            },
-
-            // Custom status order
-            {
-                $addFields: {
-                    statusOrder: {
-                        $switch: {
-                            branches: [
-                                {
-                                    case: {
-                                        $eq: [
-                                            "$applicantStatus",
-                                            "new",
-                                        ],
-                                    },
-                                    then: 1,
-                                },
-                                {
-                                    case: {
-                                        $eq: [
-                                            "$applicantStatus",
-                                            "reviewed",
-                                        ],
-                                    },
-                                    then: 2,
-                                },
-                                {
-                                    case: {
-                                        $eq: [
-                                            "$applicantStatus",
-                                            "shortlisted",
-                                        ],
-                                    },
-                                    then: 3,
-                                },
-                                {
-                                    case: {
-                                        $eq: [
-                                            "$applicantStatus",
-                                            "rejected",
-                                        ],
-                                    },
-                                    then: 4,
-                                },
-                            ],
-
-                            default: 5,
-                        },
-                    },
-                },
-            },
-
-            // Sort
-            {
-                $sort: {
-                    statusOrder: 1,
-                    createdAt: -1,
-                },
-            },
-
-            // Pagination
-            {
-                $skip: skip,
-            },
-
-            {
-                $limit: validatedLimit,
-            },
-
-            // Select fields
-            {
-                $project: {
-                    fullName: 1,
-                    email: 1,
-                    phone: 1,
-                    companyName: 1,
-                    jobRole: 1,
-                    applicantStatus: 1,
-                    createdAt: 1,
-                },
-            },
+        // Fetch count and paginated applicants in parallel
+        const [total, applicants] = await Promise.all([
+            Applicant.countDocuments(filter),
+            Applicant.find(filter)
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .select("fullName email phone companyName jobRole applicantStatus createdAt")
+                .lean(),
         ]);
 
-        return res.status(200).json({
+        res.status(200).json({
             success: true,
-
-            pagination: {
-                total: totalApplicants,
-                page: validatedPage,
-                limit: validatedLimit,
-
-                totalPages: Math.ceil(
-                    totalApplicants / validatedLimit
-                ),
-
-                hasNextPage:
-                    validatedPage <
-                    Math.ceil(
-                        totalApplicants / validatedLimit
-                    ),
-
-                hasPrevPage: validatedPage > 1,
-            },
-
-            count: applicants.length,
-
-            data: applicants,
+            currentPage: page,
+            totalPages: Math.ceil(total / limit),
+            totalApplicants: total,
+            applicants,
         });
 
     } catch (error) {
-
-        console.error(
-            "Get Applicants Error:",
-            error.message
-        );
-
-        return res.status(500).json({
+        console.error("Get Applicants Error:", error);
+        res.status(500).json({
             success: false,
-            message: "Server error",
+            message: error.message,
         });
     }
 };
@@ -348,13 +222,85 @@ const getApplicantById = async (req, res) => {
     }
 };
 
+const updateApplicantStatus = async (req, res) => {
+    try {
+        const { applicantId } = req.params;
+        const { applicantStatus } = req.body;
+
+        // Allowed statuses
+        const allowedStatuses = [
+            "new",
+            "reviewed",
+            "shortlisted",
+            "rejected",
+        ];
+
+        // Validate status
+        if (
+            !applicantStatus ||
+            !allowedStatuses.includes(applicantStatus)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid applicant status",
+            });
+        }
+
+        // Update applicant status only
+        const applicant = await Applicant.findByIdAndUpdate(
+            applicantId,
+            {
+                $set: {
+                    applicantStatus,
+                },
+            },
+            {
+                new: true,
+                runValidators: true,
+            }
+        )
+            .populate({
+                path: "job",
+                select:
+                    "name role industry location experience openings salary working_hours shift_timing working_days skills description status",
+            })
+            .lean();
+
+        // Applicant not found
+        if (!applicant) {
+            return res.status(404).json({
+                success: false,
+                message: "Applicant not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Applicant status updated successfully",
+            data: applicant,
+        });
+    } catch (error) {
+        console.error(
+            "Update Applicant Status Error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
+        });
+    }
+};
+
 const getApplicantsExcel = async (req, res) => {
     try {
 
-        const { range, startDate, endDate } = req.query;
+        const { range, startDate, endDate, applicantStatus } = req.query;
 
-        // Date filter object
-        let dateFilter = {};
+        // Main filter object
+        let filter = {};
+
+
 
         // Current date
         const now = new Date();
@@ -383,7 +329,7 @@ const getApplicantsExcel = async (req, res) => {
             }
 
             if (fromDate) {
-                dateFilter.createdAt = {
+                filter.createdAt = {
                     $gte: fromDate,
                 };
             }
@@ -392,18 +338,30 @@ const getApplicantsExcel = async (req, res) => {
         // Custom date range
         if (startDate && endDate) {
 
-            dateFilter.createdAt = {
+            filter.createdAt = {
                 $gte: new Date(startDate),
                 $lte: new Date(endDate),
             };
         }
 
+        // applicant status filter
+        if (applicantStatus) {
+            filter.applicantStatus = applicantStatus;
+        }
+
         // Fetch applicants
-        const applicants = await Applicant.find(dateFilter)
+        const applicants = await Applicant.find(filter)
             .select(
                 "fullName email phone companyName jobRole applicantStatus createdAt"
             )
             .lean();
+        // No applicants found
+        if (applicants.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No applicants found for the given criteria",
+            });
+        }
         // Create workbook
         const workbook = new ExcelJS.Workbook();
 
@@ -475,5 +433,6 @@ export {
     applyForJob,
     getApplicants,
     getApplicantById,
-    getApplicantsExcel
+    getApplicantsExcel,
+    updateApplicantStatus
 };
