@@ -10,13 +10,6 @@ const authRouter = express.Router();
 authRouter.post("/signup", authLimiter, async (req, res) => {
     try {
 
-        if (process.env.ALLOW_ADMIN_REGISTRATION !== "true") {
-            return res.status(403).json({
-                success: false,
-                message: "Admin registration disabled",
-            });
-        }
-
         const { email, password } = req.body;
         if (!email || !password) {
             return res.status(400).json({
@@ -24,6 +17,15 @@ authRouter.post("/signup", authLimiter, async (req, res) => {
                 message: "Email and password are required",
             });
         }
+        // check if any user exists in the database
+        const exisingUser = await User.findOne({});
+        if (exisingUser) {
+            return res.status(403).json({
+                success: false,
+                message: "Registration is closed.",
+            });
+        }
+
         // Protect against extremely large payloads
         if ((typeof email === 'string' && email.length > 2000) || (typeof password === 'string' && password.length > 2000)) {
             return res.status(413).json({ success: false, message: 'Payload too large' });
@@ -63,6 +65,9 @@ authRouter.post("/login", authLimiter, async (req, res) => {
                 message: "Email and password are required",
             });
         }
+
+
+
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({
@@ -89,7 +94,7 @@ authRouter.post("/login", authLimiter, async (req, res) => {
     }
 });
 
-authRouter.get("/me",adminAuth,  async (req, res) => {
+authRouter.get("/me", adminAuth, async (req, res) => {
     try {
         const user = req.user;
         res.status(200).json({ success: true, data: user });

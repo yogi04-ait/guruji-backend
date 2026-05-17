@@ -30,6 +30,7 @@ app.use(helmet());
 app.use(globalLimiter);
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // parses form data
 app.use(cookieParser());
 
 app.use(

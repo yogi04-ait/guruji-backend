@@ -1,11 +1,19 @@
 // utils/mail.js
 import nodemailer from "nodemailer";
+import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
+
+const sesClient = new SESClient({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+});
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+    SES: {
+        sesClient,
+        SendRawEmailCommand,
     },
 });
 

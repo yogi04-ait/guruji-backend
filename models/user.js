@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
     password: {
         type: String,
         required: true
-    },
+    }
 })
 
 // `unique: true` is declared on the schema path; avoid duplicate index declarations
