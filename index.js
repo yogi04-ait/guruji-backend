@@ -4,7 +4,8 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import http from 'http';
-
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import connectDB from './database.js';
 import testimonialRouter from './Routes/testimonials.js';
 
@@ -20,7 +21,9 @@ dotenv.config();
 
 const app = express();
 
+
 app.disable("x-powered-by");
+app.use(compression());
 
 const PORT = process.env.PORT || 5000;
 
@@ -39,6 +42,10 @@ app.use(
     credentials: true,
   })
 );
+
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again after 15 minutes' }) );
 
 app.use('/', authRouter);
 app.use('/', hiringPartnerRouter);

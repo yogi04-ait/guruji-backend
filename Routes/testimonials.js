@@ -5,12 +5,12 @@ const testimonialRouter = express.Router();
 
 
 
-// GET all testimonials
+// GET random 10 testimonials
 testimonialRouter.get("/testimonials", async (req, res) => {
     try {
-        const testimonials = await Testimonial.find().sort({
-            createdAt: -1,
-        });
+        const testimonials = await Testimonial.aggregate([
+            { $sample: { size: 10 } }
+        ]);
 
         res.json(testimonials);
     } catch (error) {
