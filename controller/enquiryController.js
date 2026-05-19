@@ -20,7 +20,7 @@ const createEnquiry = async (req, res) => {
             email,
             phone,
             message,
-            category = "other",
+            category = "job seeker",
 
         } = req.body;
         const safeMessage = sanitize(message);
@@ -75,7 +75,7 @@ const createEnquiry = async (req, res) => {
         const adminHtmlTemplate = adminNewEnquiry({ fullName: safeName, email: normalizedEmail, phone: normalizedPhone, category, message: safeMessage })
 
         // User email template
-        const userHtmlTemplate = userEnquiry(name);
+        const userHtmlTemplate = userEnquiry({ name: safeName });
 
         // Save enquiry first to ensure persistence before notifying
         const savedEnquiry = await newEnquiry.save();
