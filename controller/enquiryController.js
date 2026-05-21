@@ -14,6 +14,8 @@ const allowedCategories = ["job seeker", "employer", "other"];
 // Create Enquiry
 const createEnquiry = async (req, res) => {
 
+
+
     try {
         const {
             name,
@@ -68,6 +70,7 @@ const createEnquiry = async (req, res) => {
             email: normalizedEmail,
             phone: normalizedPhone,
             message: safeMessage,
+            category,
             status: "new",
         });
 
@@ -171,7 +174,7 @@ const viewEnquiry = async (req, res) => {
             });
         }
 
-        const enquiry = await Enquiry.findByIdAndUpdate(id, { $set: { status: "seen" } }, { new: true }).lean();
+        const enquiry = await Enquiry.findByIdAndUpdate(id, { $set: { status: "seen" } }, { returnDocument: "after" }).lean();
 
         if (!enquiry) {
             return res.status(404).json({

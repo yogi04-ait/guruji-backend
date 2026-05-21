@@ -31,7 +31,7 @@ const enquirySchema = new mongoose.Schema(
         category: {
             type: String,
             enum: category,
-            default: "other",
+            default: "job seeker",
         },
         status: {
             type: String,
